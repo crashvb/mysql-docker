@@ -1,0 +1,68 @@
+#!/bin/bash
+
+set -e
+
+export init_file=/etc/mysql/init-file.sql
+
+# Configure: mysql
+if [[ ! -e $EP_RUN ]] ; then
+	log "Configuring $(basename $0) for first run ..."
+
+	# Generate passwords ...
+	for i in root user ; do
+		var="MYSQL_${i^^}_PASSWORD"
+		if [[ -z "$(eval echo \$$var)" ]] ; then
+			log "Generating $var ..."
+			export $var=$(pwgen --capitalize --numerals --secure -1 64)
+			install --mode=0400 /dev/null /root/mysql_${i}_password
+			echo "$var=$(eval echo \$$var)" > /root/mysql_${i}_password
+		else
+			log "Importing $var ..."
+		fi
+	done
+
+	# Volume initialization
+	if [[ ! -d "$MYSQL_DATA/mysql" ]]; then
+		log "Initializing data volume ..."
+
+		log "	Priming reserved tables ..."
+		mysqld --initialize
+
+		log "	Generating $init_file ..."
+		cat <<-EOF > $init_file
+			DELETE FROM mysql.user ;
+			CREATE USER 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD' ;
+			GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
+			DROP DATABASE IF EXISTS test ;
+		EOF
+		
+		if [[ -n $MYSQL_DATABASE ]] ; then
+			echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` ;" >> $init_file
+		fi
+		
+		if [[ -n $MYSQL_USER ]] ; then
+			echo "CREATE USER '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_USER_PASSWORD' ;" >> $init_file
+			
+			if [[ -n $MYSQL_DATABASE ]] ; then
+				echo "GRANT ALL ON \`$MYSQL_DATABASE\`.* TO '$MYSQL_USER'@'%' ;" >> $init_file
+			fi
+		fi
+		
+		echo "FLUSH PRIVILEGES ;" >> $init_file
+
+		log "	Starting mysql ..."
+		mysqld --init-file=$init_file &
+
+		log "	Waiting for initialization..."
+		mysqladmin --password=$MYSQL_ROOT_PASSWORD --silent --wait=30 ping > /dev/null
+
+		log "	Stopping mysql ..."
+		mysqladmin --password=$MYSQL_ROOT_PASSWORD shutdown
+
+		rm --force $init_file
+	fi
+	
+	log "Applying ownership and permissions ..."
+	chown --recursive mysql:mysql $MYSQL_DATA
+fi
+
