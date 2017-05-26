@@ -6,7 +6,7 @@ ENV MYSQL_DATA=/var/lib/mysql
 RUN APT_ALL_REPOS=1 docker-apt mysql-server && \
 	rm --force --recursive ${MYSQL_DATA}/*
 
-# Configure: msyql
+# Configure: mysql
 RUN install --directory --group=mysql --mode=0750 --owner=mysql /var/run/mysqld
 
 # Configure: supervisor

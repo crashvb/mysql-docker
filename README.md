@@ -42,11 +42,9 @@ The embedded entrypoint script is located at `/etc/entrypoint.d/20mysql` and per
 
 ### Volumes
 
-None.
+* `/var/lib/mysql` - The mysql data directory.
 
 ## Development
-
-* `/var/lib/mysql` - The mysql data directory.
 
 [Source Control](https://github.com/crashvb/mysql-docker)
 
