@@ -10,15 +10,7 @@ if [[ ! -e $EP_RUN ]] ; then
 
 	# Generate passwords ...
 	for i in root user ; do
-		var="MYSQL_${i^^}_PASSWORD"
-		if [[ -z "$(eval echo \$$var)" ]] ; then
-			log "Generating $var ..."
-			export $var=$(pwgen --capitalize --numerals --secure -1 64)
-			install --mode=0400 /dev/null /root/mysql_${i}_password
-			echo "$var=$(eval echo \$$var)" > /root/mysql_${i}_password
-		else
-			log "Importing $var ..."
-		fi
+		generate_password mysql_$i
 	done
 
 	# Volume initialization
@@ -63,6 +55,6 @@ if [[ ! -e $EP_RUN ]] ; then
 	fi
 	
 	log "Applying ownership and permissions ..."
-	chown --recursive mysql:mysql $MYSQL_DATA
+	find $MYSQL_DATA \( \! -user mysql -o \! -group mysql \) -exec chown mysql:mysql {} \;
 fi
 
