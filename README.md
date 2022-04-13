@@ -1,5 +1,10 @@
 # mysql-docker
 
+[![version)](https://img.shields.io/docker/v/crashvb/mysql/latest)](https://hub.docker.com/repository/docker/crashvb/mysql)
+[![image size](https://img.shields.io/docker/image-size/crashvb/mysql/latest)](https://hub.docker.com/repository/docker/crashvb/mysql)
+[![linting](https://img.shields.io/badge/linting-hadolint-yellow)](https://github.com/hadolint/hadolint)
+[![license](https://img.shields.io/github/license/crashvb/mysql-docker.svg)](https://github.com/crashvb/mysql-docker/blob/master/LICENSE.md)
+
 ## Overview
 
 This docker image contains [mysql](https://www.mysql.com/).
@@ -14,10 +19,10 @@ The embedded entrypoint script is located at `/etc/entrypoint.d/20mysql` and per
 
  | Variable | Default Value | Description |
  | ---------| ------------- | ----------- |
- | MYSQL_ROOT_PASSWORD | _random_ | The mysql `root` password. |
- | MYSQL_DATABASE | | If defined, a database with the given name will be created. |
- | MYSQL_USER | | If defined, a user with the given name will be created. |
- | MYSQL_USER_PASSWORD | _random_ | The mysql _<user>_ password. |
+ | MYSQL\_ROOT\_PASSWORD | _random_ | The mysql `root` password. |
+ | MYSQL\_DATABASE | | If defined, a database with the given name will be created. |
+ | MYSQL\_USER | | If defined, a user with the given name will be created. |
+ | MYSQL\_USER\_PASSWORD | _random_ | The mysql _<user>_ password. |
 
 ## Standard Configuration
 
