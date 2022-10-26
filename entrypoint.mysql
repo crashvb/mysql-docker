@@ -13,6 +13,61 @@ if [[ ! -e $EP_RUN ]] ; then
 		generate_password mysql_$i
 	done
 
+	# Generate keypairs ...
+	if [[ -e $EP_SECRETS_ROOT/mysqlca.crt && -e $EP_SECRETS_ROOT/mysql.crt && -e $EP_SECRETS_ROOT/mysql.key ]] ; then
+		log "Importing mysqlca.crt, mysql.crt, and mysql.key from secrets ..."
+	else
+		# Note: Key size must be >= 3072 for "HIGH" security:
+		export MYSQL_CERT_DAYS=${MYSQL_CERT_DAYS:-30}
+		export MYSQL_KEY_SIZE=${MYSQL_KEY_SIZE:-4096}
+
+		log "Generating mysqlca.crt, mysql.crt, and mysql.key in secrets ..."
+
+		log "	certificate authority"
+		openssl genrsa \
+			-out /dev/shm/mysqlca.key \
+			$MYSQL_KEY_SIZE
+		openssl req \
+			-days $MYSQL_CERT_DAYS \
+			-key /dev/shm/mysqlca.key \
+			-new \
+			-nodes \
+			-out $EP_SECRETS_ROOT/mysqlca.crt \
+			-sha256 \
+			-subj "/CN=mysql ca" \
+			-x509
+
+		log "	server certificate"
+		openssl genrsa \
+			-out $EP_SECRETS_ROOT/mysql.key \
+			$MYSQL_KEY_SIZE
+		openssl req \
+			-key $EP_SECRETS_ROOT/mysql.key \
+			-new \
+			-nodes \
+			-out /dev/shm/mysql.csr \
+			-sha256 \
+			-subj "/CN=mysql server"
+		openssl x509 \
+			-CA $EP_SECRETS_ROOT/mysqlca.crt \
+			-CAkey /dev/shm/mysqlca.key \
+			-CAcreateserial \
+			-days $MYSQL_CERT_DAYS \
+			-in /dev/shm/mysql.csr \
+			-out $EP_SECRETS_ROOT/mysql.crt \
+			-req \
+			-sha256
+
+		rm /dev/shm/{mysqlca.key,mysql.csr} $EP_SECRETS_ROOT/mysqlca.srl
+
+	fi
+	install --group=ssl-cert --mode=0640 --owner=root $EP_SECRETS_ROOT/mysql.key /etc/ssl/private/
+	install --group=root --mode=0644 --owner=root $EP_SECRETS_ROOT/mysql{,ca}.crt /etc/ssl/certs/
+
+	ln --symbolic /etc/ssl/certs/mysqlca.crt /usr/share/ca-certificates/
+	echo mysqlca.crt >> /etc/ca-certificates.conf
+	update-ca-certificates
+
 	# Volume initialization
 	if [[ ! -d "$MYSQL_DATA/mysql" ]]; then
 		log "Initializing data volume ..."
