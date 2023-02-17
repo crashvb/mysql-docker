@@ -2,8 +2,8 @@
 
 set -e -o pipefail
 
-log "Checking if $(basename $0) is healthy ..."
+log "Checking if $(basename "${0}") is healthy ..."
 [[ $(pgrep --count --full /usr/sbin/mysqld) -gt 0 ]]
 
-mysqladmin --host=$(hostname --ip-address) ping --password="$(</run/secrets/mysql_root_password)" --silent --user=root
+mysqladmin --host="$(hostname --ip-address)" ping --password="$(</run/secrets/mysql_root_password)" --silent --user=root
 

@@ -1,115 +1,67 @@
 #!/bin/bash
 
-set -e
+set -e -o pipefail
 
 export init_file=/etc/mysql/init-file.sql
 
 # Configure: mysql
-if [[ ! -e $EP_RUN ]] ; then
-	log "Configuring $(basename $0) for first run ..."
+if [[ ! -e "${EP_RUN}" ]] ; then
+	log "Configuring $(basename "${0}") for first run ..."
 
 	# Generate passwords ...
 	for i in root user ; do
-		generate_password mysql_$i
+		generate_password "mysql_${i}"
 	done
 
 	# Generate keypairs ...
-	if [[ -e $EP_SECRETS_ROOT/mysqlca.crt && -e $EP_SECRETS_ROOT/mysql.crt && -e $EP_SECRETS_ROOT/mysql.key ]] ; then
-		log "Importing mysqlca.crt, mysql.crt, and mysql.key from secrets ..."
-	else
-		# Note: Key size must be >= 3072 for "HIGH" security:
-		export MYSQL_CERT_DAYS=${MYSQL_CERT_DAYS:-30}
-		export MYSQL_KEY_SIZE=${MYSQL_KEY_SIZE:-4096}
-
-		log "Generating mysqlca.crt, mysql.crt, and mysql.key in secrets ..."
-
-		log "	certificate authority"
-		openssl genrsa \
-			-out /dev/shm/mysqlca.key \
-			$MYSQL_KEY_SIZE
-		openssl req \
-			-days $MYSQL_CERT_DAYS \
-			-key /dev/shm/mysqlca.key \
-			-new \
-			-nodes \
-			-out $EP_SECRETS_ROOT/mysqlca.crt \
-			-sha256 \
-			-subj "/CN=mysql ca" \
-			-x509
-
-		log "	server certificate"
-		openssl genrsa \
-			-out $EP_SECRETS_ROOT/mysql.key \
-			$MYSQL_KEY_SIZE
-		openssl req \
-			-key $EP_SECRETS_ROOT/mysql.key \
-			-new \
-			-nodes \
-			-out /dev/shm/mysql.csr \
-			-sha256 \
-			-subj "/CN=mysql server"
-		openssl x509 \
-			-CA $EP_SECRETS_ROOT/mysqlca.crt \
-			-CAkey /dev/shm/mysqlca.key \
-			-CAcreateserial \
-			-days $MYSQL_CERT_DAYS \
-			-in /dev/shm/mysql.csr \
-			-out $EP_SECRETS_ROOT/mysql.crt \
-			-req \
-			-sha256
-
-		rm /dev/shm/{mysqlca.key,mysql.csr} $EP_SECRETS_ROOT/mysqlca.srl
-
-	fi
-	install --group=ssl-cert --mode=0640 --owner=root $EP_SECRETS_ROOT/mysql.key /etc/ssl/private/
-	install --group=root --mode=0644 --owner=root $EP_SECRETS_ROOT/mysql{,ca}.crt /etc/ssl/certs/
+	generate_rsakey mysql
 
 	ln --symbolic /etc/ssl/certs/mysqlca.crt /usr/share/ca-certificates/
 	echo mysqlca.crt >> /etc/ca-certificates.conf
 	update-ca-certificates
 
 	# Volume initialization
-	if [[ ! -d "$MYSQL_DATA/mysql" ]]; then
+	if [[ ! -d "${MYSQL_DATA}/mysql" ]]; then
 		log "Initializing data volume ..."
 
 		log "	Priming reserved tables ..."
 		mysqld --initialize
 
-		log "	Generating $init_file ..."
-		cat <<-EOF > $init_file
+		log "	Generating: ${init_file} ..."
+		cat <<-EOF > "${init_file}"
 			DELETE FROM mysql.user ;
-			CREATE USER 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD' ;
+			CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
 			GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
 			DROP DATABASE IF EXISTS test ;
 		EOF
 		
-		if [[ -n $MYSQL_DATABASE ]] ; then
-			echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` ;" >> $init_file
+		if [[ -n "${MYSQL_DATABASE}" ]] ; then
+			echo "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` ;" >> "${init_file}"
 		fi
 		
-		if [[ -n $MYSQL_USER ]] ; then
-			echo "CREATE USER '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_USER_PASSWORD' ;" >> $init_file
+		if [[ -n "${MYSQL_USER}" ]] ; then
+			echo "CREATE USER '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_USER_PASSWORD}' ;" >> "${init_file}"
 			
-			if [[ -n $MYSQL_DATABASE ]] ; then
-				echo "GRANT ALL ON \`$MYSQL_DATABASE\`.* TO '$MYSQL_USER'@'%' ;" >> $init_file
+			if [[ -n "${MYSQL_DATABASE}" ]] ; then
+				echo "GRANT ALL ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%' ;" >> "${init_file}"
 			fi
 		fi
 		
-		echo "FLUSH PRIVILEGES ;" >> $init_file
+		echo "FLUSH PRIVILEGES ;" >> "${init_file}"
 
 		log "	Starting mysql ..."
-		mysqld --init-file=$init_file &
+		mysqld --init-file="${init_file}" &
 
 		log "	Waiting for initialization..."
-		mysqladmin --password=$MYSQL_ROOT_PASSWORD --silent --wait=30 ping > /dev/null
+		mysqladmin --password="${MYSQL_ROOT_PASSWORD}" --silent --wait=30 ping > /dev/null
 
 		log "	Stopping mysql ..."
-		mysqladmin --password=$MYSQL_ROOT_PASSWORD shutdown
+		mysqladmin --password="${MYSQL_ROOT_PASSWORD}" shutdown
 
-		rm --force $init_file
+		rm --force "${init_file}"
 	fi
 	
 	log "Applying ownership and permissions ..."
-	find $MYSQL_DATA \( \! -user mysql -o \! -group mysql \) -exec chown mysql:mysql {} \;
+	find "${MYSQL_DATA}" \( \! -user mysql -o \! -group mysql \) -exec chown mysql:mysql {} \;
 fi
 

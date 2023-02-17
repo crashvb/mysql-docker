@@ -20,9 +20,7 @@ The embedded entrypoint script is located at `/etc/entrypoint.d/20mysql` and per
  | Variable | Default Value | Description |
  | ---------| ------------- | ----------- |
  | MYSQL\_ROOT\_PASSWORD | _random_ | The mysql `root` password. |
- | MYSQL\_CERT\_DAYS | 30 | Validity period of any generated PKI certificates. |
  | MYSQL\_DATABASE | | If defined, a database with the given name will be created. |
- | MYSQL\_KEY\_SIZE | 4096 | Key size of any generated PKI keys. |
  | MYSQL\_USER | | If defined, a user with the given name will be created. |
  | MYSQL\_USER\_PASSWORD | _random_ | The mysql _<user>_ password. |
 
@@ -35,14 +33,13 @@ The embedded entrypoint script is located at `/etc/entrypoint.d/20mysql` and per
 ├─ etc/
 │  └─ entrypoint.d/
 │     └─ 20mysql
-├─ root/
-│  ├─ mysql_root_password
-│  └─ mysql_user_password
 ├─ run/
 │  └─ secrets/
 │     ├─ mysql.crt
 │     ├─ mysql.key
-│     └─ mysqlca.crt
+│     ├─ mysqlca.crt
+│     ├─ mysql_root_password
+│     └─ mysql_user_password
 └─ var/
    └─ lib/
       └─ mysql/
