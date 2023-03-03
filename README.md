@@ -31,8 +31,13 @@ The embedded entrypoint script is located at `/etc/entrypoint.d/20mysql` and per
 ```
 /
 ├─ etc/
-│  └─ entrypoint.d/
-│     └─ 20mysql
+│  ├─ entrypoint.d/
+│  │  └─ mysql
+│  ├─ healthcheck.d/
+│  │  └─ mysql
+│  └─ supervisor/
+│     └─ config.d/
+│        └─ mysql.conf
 ├─ run/
 │  └─ secrets/
 │     ├─ mysql.crt
