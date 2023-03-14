@@ -2,7 +2,7 @@
 
 set -e -o pipefail
 
-export init_file=/etc/mysql/init-file.sql
+export init_file="/etc/mysql/init-file.sql"
 
 # Configure: mysql
 if [[ ! -e "${EP_RUN}" ]] ; then
@@ -28,23 +28,21 @@ if [[ ! -e "${EP_RUN}" ]] ; then
 		mysqld --initialize
 
 		log "	Generating: ${init_file} ..."
-		cat <<-EOF > "${init_file}"
+		cat <<- EOF > "${init_file}"
 			DELETE FROM mysql.user ;
 			CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
 			GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
 			DROP DATABASE IF EXISTS test ;
 		EOF
 		
-		if [[ -n "${MYSQL_DATABASE}" ]] ; then
+		[[ -n "${MYSQL_DATABASE}" ]] && \
 			echo "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` ;" >> "${init_file}"
-		fi
 		
 		if [[ -n "${MYSQL_USER}" ]] ; then
 			echo "CREATE USER '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_USER_PASSWORD}' ;" >> "${init_file}"
 			
-			if [[ -n "${MYSQL_DATABASE}" ]] ; then
+			[[ -n "${MYSQL_DATABASE}" ]] && \
 				echo "GRANT ALL ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%' ;" >> "${init_file}"
-			fi
 		fi
 		
 		echo "FLUSH PRIVILEGES ;" >> "${init_file}"

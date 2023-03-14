@@ -13,7 +13,7 @@ This docker image contains [mysql](https://www.mysql.com/).
 
 ### mysql
 
-The embedded entrypoint script is located at `/etc/entrypoint.d/20mysql` and performs the following actions:
+The embedded entrypoint script is located at `/etc/entrypoint.d/mysql` and performs the following actions:
 
 1. A new mysql configuration is generated using the following environment variables:
 
