@@ -19,12 +19,20 @@ RUN APT_ALL_REPOS=1 docker-apt mysql-server ssl-cert && \
 	rm --force --recursive ${MYSQL_DATA:?}/*
 
 # Configure: mysql
+COPY mysql-* /usr/local/bin/
 RUN usermod --append --groups ssl-cert mysql && \
 	install --directory --group=mysql --mode=0750 --owner=mysql /var/run/mysqld && \
 	sed --expression="/^bind-address/s/127.0.0.1/0.0.0.0/" \
-		--expression="/# ssl-ca=/cssl-ca = /etc/ssl/certs/mysqlca.crt" \
-		--expression="/# ssl-cert=/cssl-cert = /etc/ssl/certs/mysql.crt" \
-		--expression="/# ssl-key=/cssl-key = /etc/ssl/private/mysql.key\nrequire_secure_transport = ON" \
+		--expression="\$assl-ca = /etc/ssl/certs/mysqlca.crt" \
+		--expression="\$assl-cert = /etc/ssl/certs/mysql.crt" \
+		--expression="\$assl-key = /etc/ssl/private/mysql.key" \
+		--in-place=.dist /etc/mysql/mysql.conf.d/mysql.cnf && \
+	sed --expression="/^bind-address/s/127.0.0.1/0.0.0.0/" \
+		--expression="\$aauto_generate_certs = off" \
+		--expression="\$assl-ca = /etc/ssl/certs/mysqlca.crt" \
+		--expression="\$assl-cert = /etc/ssl/certs/mysql.crt" \
+		--expression="\$assl-key = /etc/ssl/private/mysql.key" \
+		--expression="\$arequire_secure_transport = on" \
 		--in-place=.dist /etc/mysql/mysql.conf.d/mysqld.cnf
 
 # Configure: supervisor

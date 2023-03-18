@@ -9,9 +9,8 @@ if [[ ! -e "${EP_RUN}" ]] ; then
 	log "Configuring $(basename "${0}") for first run ..."
 
 	# Generate passwords ...
-	for i in root user ; do
-		generate_password "mysql_${i}"
-	done
+	generate_password "mysql_root"
+	[[ -n "${MYSQL_USER}" ]] && generate_password "mysql_user"
 
 	# Generate keypairs ...
 	generate_rsakey mysql
@@ -20,14 +19,33 @@ if [[ ! -e "${EP_RUN}" ]] ; then
 	echo mysqlca.crt >> /etc/ca-certificates.conf
 	update-ca-certificates
 
+	log "Modifying: mysqld.cnf ..."
+	# https://dev.mysql.com/doc/refman/5.7/en/encrypted-connection-protocols-ciphers.html
+	MYSQL_TLS_CIPHERSUITES="${MYSQL_TLS_CIPHERSUITES:="TLS_AES_256_GCM_SHA384"}"
+	MYSQL_TLS_VERSION="${MYSQL_TLS_VERSION:="TLSv1.3"}"
+	for i in mysql mysqld; do
+		sed --expression="\$atls_version = ${MYSQL_TLS_VERSION}" \
+			--expression="\$atls_ciphersuites = ${MYSQL_TLS_CIPHERSUITES}" \
+			--in-place "/etc/mysql/mysql.conf.d/${i}.cnf"
+	done
+	[[ -n "${MYSQL_ALLOW_INSECURE_ROOT}" || -n "${MYSQL_ALLOW_INSECURE_USER}" ]] && \
+		sed --expression="/require-secure-transport = /s/^/#/g" \
+			--in-place /etc/mysql/mysql.conf.d/mysqld.cnf
+
 	# Volume initialization
 	if [[ ! -d "${MYSQL_DATA}/mysql" ]]; then
 		log "Initializing data volume ..."
 
-		log "	Priming reserved tables ..."
-		mysqld --initialize
+		log "Priming reserved tables ..."
+		/usr/sbin/mysqld \
+			--initialize \
+			--skip-networking
 
-		log "	Generating: ${init_file} ..."
+		# TODO: Are these needed for less-secure ciphersuites / tls versions?
+		#openssl genrsa -out "${MYSQL_DATA}/private_key.pem" "${EP_RSA_KEY_SIZE}"
+		#openssl rsa -in "${MYSQL_DATA}/private_key.pem" -out "${MYSQL_DATA}/public_key.pem" -pubout
+
+		log "Generating: ${init_file} ..."
 		cat <<- EOF > "${init_file}"
 			DELETE FROM mysql.user ;
 			CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
@@ -44,16 +62,29 @@ if [[ ! -e "${EP_RUN}" ]] ; then
 			[[ -n "${MYSQL_DATABASE}" ]] && \
 				echo "GRANT ALL ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%' ;" >> "${init_file}"
 		fi
-		
+
+		[[ -n "${MYSQL_ALLOW_INSECURE_ROOT}" ]] && \
+			log "Relaxing TLS: root" && \
+			echo "ALTER USER 'root'@'%' REQUIRE NONE ;" >> "${init_file}"
+		[[ -n "${MYSQL_ALLOW_INSECURE_USER}" ]] && \
+			log "Relaxying TLS: ${MYSQL_USER}" && \
+			echo "ALTER USER '${MYSQL_USER}'@'%' REQUIRE NONE ;" >> "${init_file}"
+
 		echo "FLUSH PRIVILEGES ;" >> "${init_file}"
 
-		log "	Starting mysql ..."
-		mysqld --init-file="${init_file}" &
+		log "Starting mysql ..."
+		/usr/sbin/mysqld \
+			--datadir="${MYSQL_DATA}" \
+			--default-time-zone=SYSTEM \
+			--expire-logs-days=0 \
+			--init-file="${init_file}" \
+			--skip-networking \
+			--user=root &
 
-		log "	Waiting for initialization..."
+		log "Waiting for initialization..."
 		mysqladmin --password="${MYSQL_ROOT_PASSWORD}" --silent --wait=30 ping > /dev/null
 
-		log "	Stopping mysql ..."
+		log "Stopping mysql ..."
 		mysqladmin --password="${MYSQL_ROOT_PASSWORD}" shutdown
 
 		rm --force "${init_file}"

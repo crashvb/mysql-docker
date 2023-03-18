@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e -o pipefail
+
+exec mysql \
+	--host=localhost \
+	--password="$(cat /run/secrets/mysql_user_password)" \
+	--protocol=socket \
+	--user="${MYSQL_USER}" \
+	"${@}"
+

@@ -1,0 +1,149 @@
+#!/bin/bash
+
+[[ -n "${DEBUG}" ]] && exec 3>&1 || exec 3<> /dev/null
+
+TEST_SQL="show variables like '%ssl%'; show session status where \`variable_name\` in ('ssl_cipher', 'ssl_verify_mode', 'ssl_version');"
+
+log "Installing test-prerequisits ..."
+docker-apt shunit2
+
+function oneTimeSetUp()
+{
+	log "Starting supervisord ..."
+	/usr/bin/supervisord --configuration=/etc/supervisor/supervisord.conf &
+	while [[ ! -S /run/mysqld/mysqld.sock ]] ; do
+		log "Waiting for mysqld ..."
+		sleep 1
+	done
+
+	defaults_root="$(mktemp /tmp/defaults.XXXXXX.cnf)"
+	log "Defaults [root] : ${defaults_root}"
+	cat <<- EOF > "${defaults_root}"
+		[client]
+		password="$(cat /run/secrets/mysql_root_password)"
+	EOF
+	defaults_user="$(mktemp /tmp/defaults.XXXXXX.cnf)"
+	log "Defaults [user] : ${defaults_user}"
+	cat <<- EOF > "${defaults_user}"
+		[client]
+		password="$(cat /run/secrets/mysql_user_password)"
+	EOF
+}
+
+function oneTimeTearDown()
+{
+	rm --force "${defaults_root}" "${defaults_user}"
+}
+
+function testCliRootInsecure()
+{
+	! mysql \
+		--defaults-extra-file="${defaults_root}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--ssl-mode=DISABLED \
+		--user=root 1>&3 2>&3
+	assertTrue "CLI as root [insecure]" $?
+}
+
+function testCliRootZeroWayTLS()
+{
+	mysql \
+		--defaults-extra-file="${defaults_root}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--user=root 1>&3 2>&3
+	assertTrue "CLI as root [zero-way TLS]" $?
+}
+
+function testCliRootOneWayTLS()
+{
+	mysql \
+		--defaults-extra-file="${defaults_root}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--ssl-ca=/etc/ssl/certs/mysqlca.crt \
+		--ssl-mode=VERIFY_IDENTITY \
+		--user=root 1>&3 2>&3
+	assertTrue "CLI as root [one-way TLS]" $?
+}
+
+function testCliRootTwoWayTLS()
+{
+	mysql \
+		--defaults-extra-file="${defaults_root}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--ssl-ca=/etc/ssl/certs/mysqlca.crt \
+		--ssl-cert=/etc/ssl/certs/mysql.crt \
+		--ssl-key=/etc/ssl/private/mysql.key \
+		--ssl-mode=VERIFY_IDENTITY \
+		--user=root 1>&3 2>&3
+	assertTrue "CLI as root [two-way TLS]" $?
+}
+
+function testCliUserInsecure()
+{
+	! mysql \
+		--defaults-extra-file="${defaults_user}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--ssl-mode=DISABLED \
+		--user="${MYSQL_USER}" 1>&3 2>&3
+	assertTrue "CLI as ${MYSQL_USER} [insecure]" $?
+}
+
+function testCliUserZeroWayTLS()
+{
+	mysql \
+		--defaults-extra-file="${defaults_user}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--user="${MYSQL_USER}" 1>&3 2>&3
+	assertTrue "CLI as ${MYSQL_USER} [zero-way TLS]" $?
+}
+
+function testCliUserOneWayTLS()
+{
+	mysql \
+		--defaults-extra-file="${defaults_user}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--ssl-ca=/etc/ssl/certs/mysqlca.crt \
+		--ssl-mode=VERIFY_IDENTITY \
+		--user="${MYSQL_USER}" 1>&3 2>&3
+	assertTrue "CLI as ${MYSQL_USER} [one-way TLS]" $?
+}
+
+function testCliUserTwoWayTLS()
+{
+	mysql \
+		--defaults-extra-file="${defaults_user}" \
+		--database="${MYSQL_DATABASE}" \
+		--execute="${TEST_SQL}" \
+		--host=localhost \
+		--protocol=tcp \
+		--ssl-ca=/etc/ssl/certs/mysqlca.crt \
+		--ssl-cert=/etc/ssl/certs/mysql.crt \
+		--ssl-key=/etc/ssl/private/mysql.key \
+		--ssl-mode=VERIFY_IDENTITY \
+		--user="${MYSQL_USER}" 1>&3 2>&3
+	assertTrue "CLI as ${MYSQL_USER} [two-way TLS]" $?
+}
+
+source /usr/bin/shunit2
+
